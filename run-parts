@@ -44,18 +44,19 @@ fi
 
 # Ignore *~ and *, scripts
 for i in $(LC_ALL=C; echo ${1%/}/*[^~,]) ; do
+	[ -e $i ] || continue
 	[ -d $i ] && continue
 	# Don't run *.{rpmsave,rpmorig,rpmnew,swp,cfsaved} scripts
 	[ "${i%.cfsaved}" != "${i}" ] && continue
 	[ "${i%.rpmsave}" != "${i}" ] && continue
-        [ "${i%.rpmorig}" != "${i}" ] && continue
-        [ "${i%.rpmnew}" != "${i}" ] && continue
-        [ "${i%.swp}" != "${i}" ] && continue
+	[ "${i%.rpmorig}" != "${i}" ] && continue
+	[ "${i%.rpmnew}" != "${i}" ] && continue
+	[ "${i%.swp}" != "${i}" ] && continue
 	[ "${i%,v}" != "${i}" ] && continue
 
 	# jobs.deny prevents specific files from being executed
 	# jobs.allow prohibits all non-named jobs from being run.
-	# can be used in conjunction but there's no reason to do so. 
+	# can be used in conjunction but there's no reason to do so.
 	if [ -r $1/jobs.deny ]; then
 		grep -q "^$(basename $i)$" $1/jobs.deny && continue
 	fi
@@ -63,36 +64,29 @@ for i in $(LC_ALL=C; echo ${1%/}/*[^~,]) ; do
 		grep -q "^$(basename $i)$" $1/jobs.allow || continue
 	fi
 
-	if [ -e $i ]; then
-		if [ -r $1/whitelist ]; then
-			grep -q "^$(basename $i)$" $1/whitelist && continue
-		fi
+	if [ ${list:-0} = 1 ]; then
+		echo $i
+		continue
+	fi
 
-		if [ ${list:-0} = 1 ]; then
-			echo $i;
-		elif [ -x $i ]; then
-			if [ ${test:-0} = 1 ]; then
-				echo $i;
-				continue
-			fi
-			if [ "$RANDOMIZE" != "" ]; then
-				let "rtime = $RANDOM"
-				if [ "$RANDOMTIME" != "" ]; then
-					let "rtime %= $RANDOMTIME"
-				else
-					let "rtime %= 300"
-				fi
-				sleep $rtime
-			fi
+	[ -x $i ] || continue
 
-			# run executable files
-			logger -p cron.notice -t "run-parts[$$]" "($1) starting $(basename $i)"
-			$i 2>&1 | sed '1i\
+	if [ ${test:-0} = 1 ]; then
+		echo $i
+		continue
+	fi
+
+	if [ "$RANDOMIZE" != "" ]; then
+		let "rtime = $RANDOM % ${RANDOMTIME:-300}"
+		sleep $rtime
+	fi
+
+	# run executable files
+	logger -p cron.notice -t "run-parts[$$]" "($1) starting $(basename $i)"
+	$i 2>&1 | sed '1i\
 '"$i"':\
 '
-			logger -p cron.notice -t "run-parts[$$]" "($1) finished $(basename $i)"
-		fi
-	fi
+	logger -p cron.notice -t "run-parts[$$]" "($1) finished $(basename $i)"
 done
 
 exit 0
